@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+#
+# PR 门禁：执行无副作用、无外部依赖的静态校验和单测
+
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tool/go.mod
+          cache: true
+          cache-dependency-path: tool/go.sum
+
+      - name: 构建 wrt
+        working-directory: tool
+        run: go build -o ../wrt ./cmd/wrt
+
+      - name: 校验配置
+        run: ./wrt lint
+
+      - name: go vet
+        working-directory: tool
+        run: go vet ./...
+
+      - name: 单元测试
+        working-directory: tool
+        run: go test -race ./...
+
+      - name: 冒烟测试
+        run: ./wrt plan --all | jq . > /dev/null

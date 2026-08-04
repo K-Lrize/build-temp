@@ -1,0 +1,139 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+#
+# 可复用 workflow：组装并发布单个 variant 的固件。
+
+name: (internal) Assemble firmware
+
+on:
+  workflow_call:
+    inputs:
+      variant:
+        required: true
+        type: string
+      release_id:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    runs-on: ubuntu-24.04
+    env:
+      WRT_S3_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+      WRT_S3_BUCKET: ${{ vars.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      REPO_BASE: ${{ vars.R2_PUBLIC_URL }}
+      VARIANT: ${{ inputs.variant }}
+      RELEASE_ID: ${{ inputs.release_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: wrt
+      - run: |
+          chmod +x wrt
+          echo "WRT=$PWD/wrt" >> "$GITHUB_ENV"
+
+      - name: 读取 variant 事实
+        run: |
+          R="$($WRT resolve "$VARIANT")"
+          echo "$R" | jq .
+          {
+            echo "ARTIFACTS=$(echo "$R" | jq -r .line.artifacts)"
+            echo "TARGET=$(echo "$R" | jq -r .hardware.target)"
+            echo "SUBTARGET=$(echo "$R" | jq -r .hardware.subtarget)"
+            echo "PROFILE=$(echo "$R" | jq -r .hardware.profile)"
+            echo "OPENWRT_VERSION=$(echo "$R" | jq -r .line.openwrt_version)"
+            echo "DEVICE=$(echo "$R" | jq -r .device)"
+            echo "LINE=$(echo "$R" | jq -r .line.id)"
+            echo "PARTSIZE=$(echo "$R" | jq -r '.image.rootfs_partsize // 0')"
+            echo "PACKAGES=$(echo "$R" | jq -r '.packages | join(" ")')"
+          } >> "$GITHUB_ENV"
+
+      - name: 磁盘预检
+        run: |
+          avail=$(df -Pk . | awk 'NR==2{print int($4/1048576)}')
+          [ "$avail" -ge 10 ] || { echo "::error::可用磁盘 ${avail}GiB < 10GiB"; exit 1; }
+
+      - name: 安装 ImageBuilder 依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential python3 python3-setuptools rsync unzip wget zstd file xz-utils gawk
+
+      - name: 取得 ImageBuilder
+        id: fetch_ib
+        run: |
+          "$WRT" fetch ib \
+            --artifacts "$ARTIFACTS" \
+            --openwrt-version "$OPENWRT_VERSION" \
+            --target "$TARGET" \
+            --subtarget "$SUBTARGET" \
+            --repo-base "$REPO_BASE" \
+            --line "$LINE" \
+            --out ib
+          echo "IB_ROOT=$PWD/ib" >> "$GITHUB_ENV"
+
+      - name: 设置 VERMAGIC 环境变量
+        run: echo "VERMAGIC=${{ steps.fetch_ib.outputs.vermagic }}" >> "$GITHUB_ENV"
+
+      - name: 装配三层软件源与 rootfs overlay
+        run: |
+          REPOS="$($WRT repos "$VARIANT" --vermagic "$VERMAGIC" --repo-base "$REPO_BASE")"
+          echo "$REPOS" | jq -r '.build[]' > "$IB_ROOT/repositories.conf"
+          cp "$IB_ROOT/repositories.conf" "$IB_ROOT/repositories"
+          "$WRT" files "$VARIANT" "$IB_ROOT/files-overlay"
+          mkdir -p "$IB_ROOT/files-overlay/etc/apk/repositories.d"
+          echo "$REPOS" | jq -r '.runtime[]' > "$IB_ROOT/files-overlay/etc/apk/repositories.d/99-custom.list"
+
+      - name: 注入自有公钥（IB 装包信任 + 设备运行期信任）
+        env:
+          APK_PUBLIC_KEY: ${{ secrets.APK_PUBLIC_KEY }}
+        # 注入自有公钥，供 make image 期间以及设备刷机后信任自有包
+        run: |
+          [ -n "$APK_PUBLIC_KEY" ] || { echo "::error::缺 secrets.APK_PUBLIC_KEY，装不上自有包"; exit 1; }
+          printf '%s\n' "$APK_PUBLIC_KEY" > pub.pem
+          FP="$(openssl dgst -sha256 -binary < pub.pem | xxd -p -c 256 | head -c 32)"
+          mkdir -p "$IB_ROOT/keys" "$IB_ROOT/files-overlay/etc/apk/keys"
+          cp pub.pem "$IB_ROOT/keys/${FP}.pem"
+          cp pub.pem "$IB_ROOT/files-overlay/etc/apk/keys/${FP}.pem"
+          rm -f pub.pem
+          echo "已注入公钥 ${FP}.pem"
+
+      - name: make image
+        working-directory: ib
+        run: |
+          # BIN_DIR 必须给绝对路径，否则跨子目录调用时会报 broken pipe
+          ARGS=(PROFILE="$PROFILE" PACKAGES="$PACKAGES" FILES=files-overlay BIN_DIR="$IB_ROOT/out")
+          [ "$PARTSIZE" -gt 0 ] && ARGS+=(ROOTFS_PARTSIZE="$PARTSIZE")
+          make image "${ARGS[@]}"
+
+      - name: 产物形状断言
+        run: |
+          # 断言：至少产出一个固件镜像
+          imgs="$(find "$IB_ROOT/out" -maxdepth 1 -type f \
+            ! -name sha256sums ! -name '*.manifest' ! -name '*.buildinfo' ! -name '*.json')"
+          [ -n "$imgs" ] || { echo "::error::make image 没产出任何固件镜像"; exit 1; }
+          echo "产出镜像："; echo "$imgs"
+
+
+
+      - name: 组装发布目录（IB out/ 原样 + meta/current 旁挂）
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          LINEDIR="devices/${DEVICE}/${LINE}"
+          RELDIR="${LINEDIR}/releases/${RELEASE_ID}"
+          mkdir -p "stage/${RELDIR}"
+          # 将 IB out 目录整份打包，并旁挂 meta.json 与 current.json 指针
+          cp -a "$IB_ROOT/out/." "stage/${RELDIR}/"
+          "$WRT" meta release "$VARIANT" --release-id "$RELEASE_ID" --vermagic "$VERMAGIC" \
+            --ci-run-url "$RUN_URL" > "stage/${RELDIR}/meta.json"
+          "$WRT" meta pointer "$VARIANT" --release-id "$RELEASE_ID" > "stage/${LINEDIR}/current.json"
+          find stage -type f | sed 's|^stage/||'
+
+      - name: 发布到 R2（内容→索引→指针）
+        run: |
+          "$WRT" publish stage ""

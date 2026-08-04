@@ -1,0 +1,130 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+#
+# 单一编排入口。
+#
+# 接入前需在仓库配置：
+#   变量：vars.R2_PUBLIC_URL, vars.R2_ENDPOINT, vars.R2_BUCKET
+#   机密：secrets.R2_ACCESS_KEY_ID, secrets.R2_SECRET_ACCESS_KEY
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: ["lines/**", "devices/**", "sets/**", "packages/**", "rootfs/**", "scripts/build/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      toolchain: ${{ steps.plan.outputs.toolchain }}
+      packages: ${{ steps.plan.outputs.packages }}
+      firmware: ${{ steps.plan.outputs.firmware }}
+      release_id: ${{ steps.plan.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tool/go.mod
+          cache: true
+          cache-dependency-path: tool/go.sum
+
+      - name: 构建 wrt（一次 build，下游 job 复用同一字节的二进制）
+        working-directory: tool
+        run: go build -o ../wrt ./cmd/wrt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wrt
+          path: wrt
+          retention-days: 1
+
+      - name: 校验配置
+        run: ./wrt lint
+
+      - name: 计算 release_id 与固件矩阵
+        id: plan
+        env:
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          RELEASE_ID="$(./wrt id release)"
+          echo "release_id=${RELEASE_ID}" >> "$GITHUB_OUTPUT"
+
+          PLAN="$(./wrt plan --repo-base '${{ vars.R2_PUBLIC_URL }}')"
+          echo "${PLAN}" | jq .
+          echo "toolchain=$(echo "${PLAN}" | jq -c '.toolchain')" >> "$GITHUB_OUTPUT"
+          echo "packages=$(echo "${PLAN}" | jq -c '.packages')" >> "$GITHUB_OUTPUT"
+          echo "firmware=$(echo "${PLAN}" | jq -c '.firmware')" >> "$GITHUB_OUTPUT"
+
+  toolchain:
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.outputs.toolchain != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        t: ${{ fromJson(needs.plan.outputs.toolchain) }}
+    uses: ./.github/workflows/_toolchain.yml
+    with:
+      line: ${{ matrix.t.line }}
+      target: ${{ matrix.t.target }}
+      subtarget: ${{ matrix.t.subtarget }}
+      repo: ${{ matrix.t.repo }}
+      commit: ${{ matrix.t.commit }}
+      line_tree: ${{ matrix.t.line_tree }}
+      fingerprint: ${{ matrix.t.fingerprint }}
+    secrets: inherit
+
+  packages:
+    needs: [plan, toolchain]
+    # toolchain 必须先于 packages
+    if: ${{ !cancelled() && needs.toolchain.result != 'failure' && needs.plan.outputs.packages != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        p: ${{ fromJson(needs.plan.outputs.packages) }}
+    uses: ./.github/workflows/_packages.yml
+    with:
+      line: ${{ matrix.p.line }}
+      arch: ${{ matrix.p.arch }}
+      sdk_target: ${{ matrix.p.sdk_target }}
+      openwrt_version: ${{ matrix.p.openwrt_version }}
+      artifacts: ${{ matrix.p.artifacts }}
+      fingerprint: ${{ matrix.p.fingerprint }}
+    secrets: inherit
+
+  firmware:
+    needs: [plan, packages]
+    # packages 必须先于 firmware。!cancelled() 避免无改动时流水线静默失败。
+    if: ${{ !cancelled() && needs.packages.result != 'failure' && needs.plan.outputs.firmware != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        v: ${{ fromJson(needs.plan.outputs.firmware) }}
+    uses: ./.github/workflows/_firmware.yml
+    with:
+      variant: ${{ matrix.v.variant }}
+      release_id: ${{ needs.plan.outputs.release_id }}
+    secrets: inherit
+
+  gc:
+    needs: [plan, toolchain, packages, firmware]
+    if: ${{ !cancelled() && needs.toolchain.result != 'failure' && needs.packages.result != 'failure' && needs.firmware.result != 'failure' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: wrt
+      - run: chmod +x wrt
+      - name: 回收旧产物
+        # M2 先 dry-run，确认后改为 --apply
+        env:
+          WRT_S3_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+          WRT_S3_BUCKET: ${{ vars.R2_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: ./wrt gc

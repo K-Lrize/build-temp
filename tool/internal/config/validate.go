@@ -1,0 +1,202 @@
+package config
+
+import (
+	"github.com/K-Lrize/openwrt-build/internal/diag"
+	"regexp"
+	"strings"
+)
+
+var (
+	// id / 设备名：小写 kebab，同时要能安全地当 R2 路径片段与目录名。
+	reIdent = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+// 完整 patch 号。只写 25.12 会让「同一条版本线不同设备各自指向
+	reOpenWrtVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
+	reCommit           = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	rePackage          = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._+-]*$`)
+	// 从 ref 里认版本线：v25.12.5、openwrt-25.12、25.12 都能认出 25.12。
+	reRefVersion = regexp.MustCompile(`([0-9]+)\.([0-9]+)`)
+)
+
+// archByTarget 只收录本仓库真实用到过的 target 组合。
+var archByTarget = map[string]string{
+	"armsr/armv8":      "aarch64_generic",
+	"mediatek/filogic": "aarch64_cortex-a53",
+}
+
+// Validate 校验单个 line 自身自洽。跨文件的规则（id 与目录名一致、
+func (l Line) Validate() diag.Problems {
+	var ps diag.Problems
+
+	if !reIdent.MatchString(l.ID) {
+		ps = ps.Errorf("line.id", "id %q 非法：只允许小写字母、数字、点、连字符、下划线，且首字符为字母或数字", l.ID)
+	}
+	if !reOpenWrtVersion.MatchString(l.OpenWrtVersion) {
+		ps = ps.Errorf("line.openwrt_version", "openwrt_version %q 必须是完整 patch 号（如 25.12.5），不接受 25.12 这类让系统猜测的写法", l.OpenWrtVersion)
+	}
+
+	switch l.Artifacts {
+	case ArtifactsOfficial:
+		if l.Source != nil {
+			ps = ps.Errorf("line.source.unexpected", "artifacts=official 的 line 不该声明 source：产物直接借官方，源码字段不参与任何决策，留着只会误导")
+		}
+	case ArtifactsSelf:
+		if l.Source == nil {
+			ps = ps.Errorf("line.source.missing", "artifacts=self 必须声明 source（repo/commit/ref）")
+		}
+	default:
+		ps = ps.Errorf("line.artifacts", "artifacts %q 非法：只能是 %q 或 %q", l.Artifacts, ArtifactsOfficial, ArtifactsSelf)
+	}
+
+	if l.Source != nil {
+		ps = append(ps, l.validateSource()...)
+	}
+	return ps
+}
+
+func (l Line) validateSource() diag.Problems {
+	var ps diag.Problems
+	src := l.Source
+
+	if !strings.HasPrefix(src.Repo, "http://") && !strings.HasPrefix(src.Repo, "https://") {
+		ps = ps.Errorf("line.source.repo", "source.repo %q 必须是 http(s) URL——CI 里没有 ssh 凭据", src.Repo)
+	}
+	if !reCommit.MatchString(src.Commit) {
+		ps = ps.Errorf("line.source.commit",
+			"source.commit %q 必须是 40 位完整哈希；用 `git ls-remote --tags <repo> '<tag>*'` 取值，"+
+				"带注解的 tag 要取 ^{} 剥离后的提交对象", src.Commit)
+	}
+
+// artifacts=self 时 L3 社区 feed 仍然借 openwrt_version 那条线，两者必须
+	if src.Ref == "" {
+		ps = ps.Errorf("line.source.ref", "artifacts=self 时 source.ref 必填：它是离线核对「openwrt_version 与源码是否同一条版本线」的唯一依据")
+		return ps
+	}
+	refLine := versionLine(src.Ref)
+	if refLine == "" {
+		ps = ps.Warnf("line.openwrt_version-ref-unknown",
+			"source.ref %q 里没有版本号，无法核对它与 openwrt_version %s 是否同一条版本线；"+
+				"跟踪 master 是合法的，但要自己确认借来的 L3 社区包与自编 libc 兼容", src.Ref, l.OpenWrtVersion)
+		return ps
+	}
+	if up := versionLine(l.OpenWrtVersion); up != "" && up != refLine {
+		ps = ps.Errorf("line.openwrt_version-ref-mismatch",
+			"openwrt_version %s（%s 线）与 source.ref %s（%s 线）不是同一条版本线："+
+				"L3 社区 feed 借 openwrt_version，自编 libc 来自 source，两者错线会在设备上表现为依赖装不上",
+			l.OpenWrtVersion, up, src.Ref, refLine)
+	}
+	return ps
+}
+
+// versionLine 从版本号或 ref 里取 <major>.<minor>，取不到返回空串。
+func versionLine(s string) string {
+	m := reRefVersion.FindStringSubmatch(s)
+	if m == nil {
+		return ""
+	}
+	return m[1] + "." + m[2]
+}
+
+// Validate 校验单台设备自身自洽。跨文件规则（name 与目录名一致、
+func (d Device) Validate() diag.Problems {
+	var ps diag.Problems
+
+	if !reIdent.MatchString(d.Name) {
+		ps = ps.Errorf("device.name", "name %q 非法：只允许小写字母、数字、点、连字符、下划线", d.Name)
+	}
+
+// 用有序切片而不是 map：map 迭代顺序随机，会让 lint 的输出在两次运行之间
+	for _, f := range []struct{ name, value string }{
+		{"target", d.Hardware.Target},
+		{"subtarget", d.Hardware.Subtarget},
+		{"profile", d.Hardware.Profile},
+		{"arch", d.Hardware.Arch},
+	} {
+		if f.value == "" {
+			ps = ps.Errorf("device.hardware", "hardware.%s 必填", f.name)
+		}
+	}
+	ps = append(ps, d.Hardware.validateArch()...)
+
+	switch {
+	case len(d.Lines) == 0:
+		ps = ps.Errorf("device.lines", "lines 至少要有一条：它是这台设备的出货矩阵，空列表意味着永远不会被构建")
+	default:
+		if dup := firstDuplicate(d.Lines); dup != "" {
+			ps = ps.Errorf("device.lines", "lines 里 %q 重复", dup)
+		}
+	}
+
+	if d.Image.RootfsPartsize < 0 {
+		ps = ps.Errorf("device.image", "image.rootfs_partsize 不能为负（当前 %d）", d.Image.RootfsPartsize)
+	}
+
+	ps = append(ps, validatePackages(d.Packages.Add, d.Packages.Remove)...)
+	return ps
+}
+
+// validateArch 拦「arch 与 target/subtarget 不对应」。
+func (h Hardware) validateArch() diag.Problems {
+	var ps diag.Problems
+	key := h.TargetKey()
+	want, known := archByTarget[key]
+	if !known {
+		return ps.Warnf("device.arch", "target 组合 %q 尚未收录，无法核对 arch=%q；接入后请把实测值加进 archByTarget", key, h.Arch)
+	}
+	if h.Arch != want {
+		ps = ps.Errorf("device.arch", "target 组合 %q 的 arch 应为 %q，当前为 %q", key, want, h.Arch)
+	}
+	return ps
+}
+
+// Validate 校验单个包集自身自洽。
+func (s Set) Validate() diag.Problems {
+	var ps diag.Problems
+	if !reIdent.MatchString(s.Name) {
+		ps = ps.Errorf("set.name", "name %q 非法：只允许小写字母、数字、点、连字符、下划线", s.Name)
+	}
+	if len(s.Add) == 0 && len(s.Remove) == 0 {
+		ps = ps.Errorf("set.empty", "包集 %q 的 add 与 remove 都为空，没有任何作用", s.Name)
+	}
+	ps = append(ps, validatePackages(s.Add, s.Remove)...)
+	return ps
+}
+
+// validatePackages 是 device 与 set 共用的包名与冲突检查。
+func validatePackages(add, remove []string) diag.Problems {
+	var ps diag.Problems
+
+	for _, list := range [][]string{add, remove} {
+		for _, name := range list {
+			if rePackage.MatchString(name) {
+				continue
+			}
+			hint := ""
+			if strings.HasPrefix(name, "-") {
+				hint = "；remove 列表里直接写包名即可，`-` 前缀是 ImageBuilder 的 PACKAGES 语法，由本工具在最后拼上"
+			}
+			ps = ps.Errorf("packages.name", "包名 %q 非法%s", name, hint)
+		}
+	}
+
+	inRemove := make(map[string]bool, len(remove))
+	for _, name := range remove {
+		inRemove[name] = true
+	}
+	for _, name := range add {
+		if inRemove[name] {
+			ps = ps.Errorf("packages.conflict", "%q 同时出现在 add 与 remove 里", name)
+		}
+	}
+	return ps
+}
+
+func firstDuplicate(items []string) string {
+	seen := make(map[string]bool, len(items))
+	for _, item := range items {
+		if seen[item] {
+			return item
+		}
+		seen[item] = true
+	}
+	return ""
+}
