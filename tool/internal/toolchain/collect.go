@@ -164,13 +164,12 @@ func collectArchives(tgtDir, sdkIbOut string, res *Result) error {
 	return os.WriteFile(filepath.Join(sdkIbOut, "sha256sums"), []byte(b.String()), 0o644)
 }
 
-// signIndexes 用源码树里的 host apk 给 kmod/base 目录生成并签名索引。找不到 apk
-// 时只告警不失败——本地调试常常没有编出 host apk。
+// signIndexes 用源码树里的 host apk 给 kmod/base 目录生成并签名索引。
+// apk 签名是必须的——设备运行期凭公钥验证索引，无法签名直接报错。
 func signIndexes(openwrtDir string, warnw io.Writer, dirs ...string) error {
 	apkBin, _ := filepath.Abs(filepath.Join(openwrtDir, "staging_dir", "host", "bin", "apk"))
 	if _, err := os.Stat(apkBin); err != nil {
-		fmt.Fprintf(warnw, "警告: 找不到 apk %s，跳过索引生成\n", apkBin)
-		return nil
+		return fmt.Errorf("找不到 host apk 工具 %s，make world 可能未完整编出 host 工具链: %w", apkBin, err)
 	}
 	root, _ := filepath.Abs(openwrtDir)
 	key, _ := filepath.Abs(filepath.Join(openwrtDir, "private-key.pem"))
