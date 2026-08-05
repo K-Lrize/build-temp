@@ -1,5 +1,5 @@
-// Package feed 校验 feed/ 下自有软件包的 Makefile。
-package packages
+// Package pkglint 校验 packages/ 下自有软件包的 Makefile。
+package pkglint
 
 import (
 	"errors"
@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	dirFeed  = "packages"
-	fileMake = "Makefile"
+	dirPackages = "packages"
+	fileMake    = "Makefile"
 
 	// 顶替官方同名包时，供应商优先级必须高过官方默认值。
 	minProviderPriority = 200
@@ -34,14 +34,14 @@ var (
 	// 值里含 make 变量引用时，展开后的内容这里看不到，只能跳过校验而不是误报。
 	reMakeVar = regexp.MustCompile(`\$[({]`)
 
-// apk（Alpine 从 Gentoo ebuild 继承的）版本号语法：
+	// apk（Alpine 从 Gentoo ebuild 继承的）版本号语法：
 	reAPKVersion = regexp.MustCompile(
 		`^([0-9]+:)?[0-9]+(\.[0-9]+)*[a-z]?((_alpha|_beta|_pre|_rc|_cvs|_svn|_git|_hg|_p)[0-9]*)*(-r[0-9]+)?$`)
 )
 
 // Package 是 feed/ 下的一个自有软件包。
 type Package struct {
-// Name 是目录名。它同时是 CI 里 `make package/<name>/compile` 的目标名，
+	// Name 是目录名。它同时是 CI 里 `make package/<name>/compile` 的目标名，
 	Name string
 	// Vars 是 Makefile 里的顶层变量赋值，未做 make 展开。
 	Vars            map[string]string
@@ -50,7 +50,7 @@ type Package struct {
 
 // Load 扫描 <root>/feed/ 下的全部自有包并校验。
 func Load(root string) ([]Package, diag.Problems, error) {
-	dir := filepath.Join(root, dirFeed)
+	dir := filepath.Join(root, dirPackages)
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil, nil
@@ -72,7 +72,7 @@ func Load(root string) ([]Package, diag.Problems, error) {
 		ps       diag.Problems
 	)
 	for _, name := range names {
-		rel := path.Join(dirFeed, name, fileMake)
+		rel := path.Join(dirPackages, name, fileMake)
 		content, err := os.ReadFile(filepath.Join(root, rel))
 		if errors.Is(err, fs.ErrNotExist) {
 			var one diag.Problems
@@ -191,7 +191,7 @@ func (p Package) validateProvides() diag.Problems {
 		}
 	}
 
-// PKG_RELEASE 只在「顶替官方包」时才有下限要求：纯自建包从 1 开始完全
+	// PKG_RELEASE 只在「顶替官方包」时才有下限要求：纯自建包从 1 开始完全
 	if release, ok := p.Vars["PKG_RELEASE"]; ok && !reMakeVar.MatchString(release) {
 		if n, err := strconv.Atoi(release); err == nil && n < minOverridingRelease {
 			ps = ps.Warnf("feed.pkg-release",

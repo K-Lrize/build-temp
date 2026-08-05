@@ -84,7 +84,7 @@ func TestAllExpandsDeviceTimesLine(t *testing.T) {
 		t.Fatalf("不该有错：\n%s", ps)
 	}
 
-// 顺序：设备名字典序，同一设备内按 device.yaml 里 lines 的声明顺序
+	// 顺序：设备名字典序，同一设备内按 device.yaml 里 lines 的声明顺序
 	want := []string{"mt3600be@25.12", "mt3600be@25.12-mtk", "vm-armsr@25.12"}
 	var got []string
 	for _, v := range variants {
@@ -136,7 +136,7 @@ func TestVariantPackagesMergeSetsThenDevice(t *testing.T) {
 }
 
 func TestSameDeviceDifferentLinesShareThePackageList(t *testing.T) {
-// 包列表只由 device + sets 决定，与 line 无关。两条线的固件差别在
+	// 包列表只由 device + sets 决定，与 line 无关。两条线的固件差别在
 	variants, _ := All(twoLineTree(t))
 	var lists [][]string
 	for _, v := range variants {
@@ -209,8 +209,14 @@ func TestParseID(t *testing.T) {
 			continue
 		}
 		if device != tc.device || line != tc.line {
-func TestCrossLayerPackageConflictSurfacesPerVariant(t *testing.T) {
-// 包集装上、设备卸掉——合并层面的冲突要在展开 variant 时报出来，
+			t.Errorf("%q → device=%q line=%q，想要 device=%q line=%q", tc.in, device, line, tc.device, tc.line)
+		}
+	}
+}
+
+func TestDeviceRemoveOverridesSetAdd(t *testing.T) {
+	// 包集装上、设备卸掉：设备层最后生效（后浪推前浪），这不是冲突而是
+	// remove 的正当用途——最终包列表里该包以 - 前缀出现，且不报错。
 	cfg := writeTree(t, map[string]string{
 		"lines/25.12/line.yaml": `
 id: "25.12"
@@ -231,12 +237,15 @@ packages:
 `,
 	})
 
-	_, ps := All(cfg)
-	if !ps.HasError() {
-		t.Fatal("跨层冲突应当报错")
+	variants, ps := All(cfg)
+	if ps.HasError() {
+		t.Fatalf("设备卸掉包集带来的包不该报错：\n%s", ps)
 	}
-	if ps[0].Source != "devices/vm-armsr/device.yaml" {
-		t.Errorf("冲突要指回设备文件，得到 %q", ps[0].Source)
+	if len(variants) != 1 {
+		t.Fatalf("want 1 variant, got %d", len(variants))
+	}
+	if !reflect.DeepEqual(variants[0].Packages, []string{"-dnsmasq-full"}) {
+		t.Errorf("设备 remove 应把包变成 -dnsmasq-full，得到 %v", variants[0].Packages)
 	}
 }
 

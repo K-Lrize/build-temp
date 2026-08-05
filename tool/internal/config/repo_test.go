@@ -37,7 +37,7 @@ func TestRepositoryConfigIsValid(t *testing.T) {
 
 // intentionalAdditions 登记相对旧仓库**有意**新增的包。迁移的默认要求是逐包
 var intentionalAdditions = map[string][]string{
-// zsh 两个插件旧仓库靠构建期钩子拉成 overlay 文件；现在改由自有 feed 的
+	// zsh 两个插件旧仓库靠构建期钩子拉成 overlay 文件；现在改由自有 feed 的
 	"mt3600be": {"zsh-autosuggestions", "zsh-syntax-highlighting"},
 }
 

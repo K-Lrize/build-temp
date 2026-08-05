@@ -42,10 +42,12 @@ func read(t *testing.T, path string) string {
 	return string(data)
 }
 
+// atRepo 写一个文件：最后一个可变参数是文件内容，前面的是相对 root 的路径段。
 func atRepo(t *testing.T, root string, elem ...string) {
 	t.Helper()
-	path := filepath.Join(append([]string{root}, elem...)...)
-	writeFile(t, path, "", 0o644)
+	content := elem[len(elem)-1]
+	path := filepath.Join(append([]string{root}, elem[:len(elem)-1]...)...)
+	writeFile(t, path, content, 0o644)
 }
 
 func mustChmod(t *testing.T, path string, mode os.FileMode) {
@@ -58,7 +60,7 @@ func mustChmod(t *testing.T, path string, mode os.FileMode) {
 func TestDeviceLayerOverridesCommonLayer(t *testing.T) {
 	root := t.TempDir()
 	atRepo(t, root, "rootfs", "etc", "banner", "common banner")
-	atRepo(t, root, "devices", "router", "rootfs", "etc", "banner", "router banner")
+	atRepo(t, root, "devices", "mt3600be", "rootfs", "etc", "banner", "router banner")
 	writeFile(t, filepath.Join(root, "rootfs/root/.zshrc"), "通用 zshrc\n", 0o644)
 	writeFile(t, filepath.Join(root, "devices/mt3600be/rootfs/root/.zshrc"), "设备 zshrc\n", 0o644)
 	writeFile(t, filepath.Join(root, "devices/mt3600be/rootfs/etc/sysctl.d/99-bbr.conf"), "bbr\n", 0o644)
@@ -152,8 +154,8 @@ func TestNonEmptyDestIsRejected(t *testing.T) {
 func TestGenScriptsRunInOrderAfterFilesAreInPlace(t *testing.T) {
 	root := t.TempDir()
 	atRepo(t, root, "rootfs", "a", "1")
-	atRepo(t, root, "scripts/build", "01-first.sh", "#!/bin/sh\necho \"first: $(cat $WRT_OVERLAY_DIR/a)\" >> $WRT_OVERLAY_DIR/order\n")
-	atRepo(t, root, "scripts/build", "02-second.sh", "#!/bin/sh\necho \"second\" >> $WRT_OVERLAY_DIR/order\n")
+	atRepo(t, root, "scripts/build", "01-first.sh", "#!/bin/sh\necho \"first: $(cat $WRT_FILES_DIR/a)\" >> $WRT_FILES_DIR/order\n")
+	atRepo(t, root, "scripts/build", "02-second.sh", "#!/bin/sh\necho \"second\" >> $WRT_FILES_DIR/order\n")
 	mustChmod(t, filepath.Join(root, "scripts/build", "01-first.sh"), 0o755)
 	mustChmod(t, filepath.Join(root, "scripts/build", "02-second.sh"), 0o755)
 
@@ -168,11 +170,11 @@ func TestGenScriptsRunInOrderAfterFilesAreInPlace(t *testing.T) {
 
 func TestDeviceGenScriptsRunAfterCommonOnes(t *testing.T) {
 	root := t.TempDir()
-	atRepo(t, root, "scripts/build", "10-common.sh", "#!/bin/sh\necho \"common\" >> $WRT_OVERLAY_DIR/order\n")
+	atRepo(t, root, "scripts/build", "10-common.sh", "#!/bin/sh\necho \"common\" >> $WRT_FILES_DIR/order\n")
 	mustChmod(t, filepath.Join(root, "scripts/build", "10-common.sh"), 0o755)
 
-	atRepo(t, root, "devices", "router", "scripts/build", "01-device.sh", "#!/bin/sh\necho \"device\" >> $WRT_OVERLAY_DIR/order\n")
-	mustChmod(t, filepath.Join(root, "devices", "router", "scripts/build", "01-device.sh"), 0o755)
+	atRepo(t, root, "devices", "mt3600be", "scripts/build", "01-device.sh", "#!/bin/sh\necho \"device\" >> $WRT_FILES_DIR/order\n")
+	mustChmod(t, filepath.Join(root, "devices", "mt3600be", "scripts/build", "01-device.sh"), 0o755)
 
 	dest := filepath.Join(t.TempDir(), "overlay")
 	if err := Assemble(root, testVariant(), dest); err != nil {
@@ -185,9 +187,7 @@ func TestDeviceGenScriptsRunAfterCommonOnes(t *testing.T) {
 
 func TestGenScriptsOnlyGetOverlayDir(t *testing.T) {
 	root := t.TempDir()
-	atRepo(t, root, "scripts/build", "fail.sh", `#!/bin/sh
-env > $WRT_OVERLAY_DIR/env
-`)
+	atRepo(t, root, "scripts/build", "dump.sh", "#!/bin/sh\nenv > $WRT_FILES_DIR/env\n")
 	mustChmod(t, filepath.Join(root, "scripts/build", "dump.sh"), 0o755)
 
 	dest := filepath.Join(t.TempDir(), "overlay")
@@ -196,13 +196,13 @@ env > $WRT_OVERLAY_DIR/env
 	}
 
 	got := read(t, filepath.Join(dest, "env"))
-	if !strings.Contains(got, "files_dir="+dest) {
+	if !strings.Contains(got, "WRT_FILES_DIR="+dest) {
 		t.Errorf("WRT_FILES_DIR 应指向 overlay 目录:\n%s", got)
 	}
-	// variant / device / 包列表不该被注入——注入它们就是在邀请脚本做决定。
-	for _, want := range []string{"variant=<unset>", "device=<unset>", "packages=<unset>"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("variant 上下文不该出现在 files-gen 环境里，缺少 %q:\n%s", want, got)
+	// variant / device / 硬件 / 包列表都不该被注入——注入它们就是在邀请脚本做决定。
+	for _, leak := range []string{"mt3600be@25.12", "glinet_gl-mt3600be", "aarch64_cortex-a53"} {
+		if strings.Contains(got, leak) {
+			t.Errorf("variant 上下文不该出现在 files-gen 环境里，泄漏了 %q:\n%s", leak, got)
 		}
 	}
 }
@@ -210,7 +210,7 @@ env > $WRT_OVERLAY_DIR/env
 func TestFailingGenScriptAbortsAssembly(t *testing.T) {
 	// 脚本失败被吞掉，会产出一份少了内容却看着正常的 overlay。
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "files-gen/boom.sh"),
+	writeFile(t, filepath.Join(root, "scripts/build/boom.sh"),
 		"#!/usr/bin/env bash\necho 出错了 >&2\nexit 3\n", 0o755)
 
 	dest := filepath.Join(t.TempDir(), "overlay")

@@ -7,7 +7,7 @@ import (
 
 	"github.com/K-Lrize/openwrt-build/internal/config"
 	"github.com/K-Lrize/openwrt-build/internal/diag"
-	"github.com/K-Lrize/openwrt-build/internal/packages"
+	"github.com/K-Lrize/openwrt-build/internal/pkglint"
 	"github.com/K-Lrize/openwrt-build/internal/resolve"
 )
 
@@ -21,14 +21,14 @@ func lintCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-// 跨层的包冲突要展开 variant 才看得见（单个文件内部自洽不代表合并后自洽），
+			// 跨层的包冲突要展开 variant 才看得见（单个文件内部自洽不代表合并后自洽），
 			if !problems.HasError() {
 				if _, more := resolve.All(cfg); len(more) > 0 {
 					problems = append(problems, more...)
 				}
 			}
 
-			_, feedProblems, err := packages.Load(app.Root)
+			_, feedProblems, err := pkglint.Load(app.Root)
 			if err != nil {
 				return err
 			}

@@ -9,10 +9,10 @@ import (
 var (
 	// id / 设备名：小写 kebab，同时要能安全地当 R2 路径片段与目录名。
 	reIdent = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
-// 完整 patch 号。只写 25.12 会让「同一条版本线不同设备各自指向
+	// 完整 patch 号。只写 25.12 会让「同一条版本线不同设备各自指向
 	reOpenWrtVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
-	reCommit           = regexp.MustCompile(`^[0-9a-f]{40}$`)
-	rePackage          = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._+-]*$`)
+	reCommit         = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	rePackage        = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._+-]*$`)
 	// 从 ref 里认版本线：v25.12.5、openwrt-25.12、25.12 都能认出 25.12。
 	reRefVersion = regexp.MustCompile(`([0-9]+)\.([0-9]+)`)
 )
@@ -23,12 +23,23 @@ var archByTarget = map[string]string{
 	"mediatek/filogic": "aarch64_cortex-a53",
 }
 
+// reservedLineIDs 是 R2 布局里的结构段名。line id 直接充当 R2 顶层命名空间前缀，
+// 取这些名字会与目录结构撞车（例如 line 名叫 devices 会盖掉固件根 devices/）。
+// 别人接手往仓库里加线时，这条校验把这类隐患挡在 lint 阶段。
+var reservedLineIDs = map[string]bool{
+	"devices": true, "lines": true, "targets": true,
+	"packages": true, "builds": true, "kmods": true, "releases": true,
+}
+
 // Validate 校验单个 line 自身自洽。跨文件的规则（id 与目录名一致、
 func (l Line) Validate() diag.Problems {
 	var ps diag.Problems
 
 	if !reIdent.MatchString(l.ID) {
 		ps = ps.Errorf("line.id", "id %q 非法：只允许小写字母、数字、点、连字符、下划线，且首字符为字母或数字", l.ID)
+	}
+	if reservedLineIDs[l.ID] {
+		ps = ps.Errorf("line.id-reserved", "id %q 是 R2 布局的保留结构段名，作为命名空间前缀会与目录结构冲突，请改名", l.ID)
 	}
 	if !reOpenWrtVersion.MatchString(l.OpenWrtVersion) {
 		ps = ps.Errorf("line.openwrt_version", "openwrt_version %q 必须是完整 patch 号（如 25.12.5），不接受 25.12 这类让系统猜测的写法", l.OpenWrtVersion)
@@ -66,7 +77,7 @@ func (l Line) validateSource() diag.Problems {
 				"带注解的 tag 要取 ^{} 剥离后的提交对象", src.Commit)
 	}
 
-// artifacts=self 时 L3 社区 feed 仍然借 openwrt_version 那条线，两者必须
+	// artifacts=self 时 L3 社区 feed 仍然借 openwrt_version 那条线，两者必须
 	if src.Ref == "" {
 		ps = ps.Errorf("line.source.ref", "artifacts=self 时 source.ref 必填：它是离线核对「openwrt_version 与源码是否同一条版本线」的唯一依据")
 		return ps
@@ -104,7 +115,7 @@ func (d Device) Validate() diag.Problems {
 		ps = ps.Errorf("device.name", "name %q 非法：只允许小写字母、数字、点、连字符、下划线", d.Name)
 	}
 
-// 用有序切片而不是 map：map 迭代顺序随机，会让 lint 的输出在两次运行之间
+	// 用有序切片而不是 map：map 迭代顺序随机，会让 lint 的输出在两次运行之间
 	for _, f := range []struct{ name, value string }{
 		{"target", d.Hardware.Target},
 		{"subtarget", d.Hardware.Subtarget},

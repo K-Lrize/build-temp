@@ -30,7 +30,7 @@ type ToolchainEntry struct {
 	Repo      string `json:"repo"`
 	// Commit 是 CI 唯一信任的源码坐标，ref 只供人读。
 	Commit string `json:"commit"`
-// LineTree 写进工具链 meta.json，与 Commit 分开存——排障时一眼区分是
+	// LineTree 写进工具链 meta.json，与 Commit 分开存——排障时一眼区分是
 	LineTree    string `json:"line_tree"`
 	Fingerprint string `json:"fingerprint"`
 	NeedsBuild  bool   `json:"needs_build"`
@@ -40,13 +40,13 @@ type ToolchainEntry struct {
 type PackagesEntry struct {
 	Line string `json:"line"`
 	Arch string `json:"arch"`
-// SDKTarget 决定用哪套 SDK 来编。同 arch 即同 ABI，用哪个 target 的 SDK
-	SDKTarget        string           `json:"sdk_target"`
-	Artifacts        config.Artifacts `json:"artifacts"`
+	// SDKTarget 决定用哪套 SDK 来编。同 arch 即同 ABI，用哪个 target 的 SDK
+	SDKTarget      string           `json:"sdk_target"`
+	Artifacts      config.Artifacts `json:"artifacts"`
 	OpenWrtVersion string           `json:"openwrt_version"`
-	Commit           string           `json:"commit,omitempty"`
-	Fingerprint      string           `json:"fingerprint"`
-	NeedsBuild       bool             `json:"needs_build"`
+	Commit         string           `json:"commit,omitempty"`
+	Fingerprint    string           `json:"fingerprint"`
+	NeedsBuild     bool             `json:"needs_build"`
 }
 
 // FirmwareEntry 是一次固件组装，一个 variant 一条。
@@ -158,12 +158,12 @@ func packagesMatrix(variants []resolve.Variant, fps map[string]Fingerprints, rem
 		if !seen {
 			fp := fps[v.ID]
 			entry = PackagesEntry{
-				Line:             v.Line.ID,
-				Arch:             v.Hardware.Arch,
-				SDKTarget:        v.Hardware.TargetKey(),
-				Artifacts:        v.Line.Artifacts,
+				Line:           v.Line.ID,
+				Arch:           v.Hardware.Arch,
+				SDKTarget:      v.Hardware.TargetKey(),
+				Artifacts:      v.Line.Artifacts,
 				OpenWrtVersion: v.Line.OpenWrtVersion,
-				Fingerprint:      fp.Feed,
+				Fingerprint:    fp.Feed,
 			}
 			if v.Line.Source != nil {
 				entry.Commit = v.Line.Source.Commit
@@ -202,7 +202,7 @@ func firmwareMatrix(variants []resolve.Variant, fps map[string]Fingerprints, rem
 		entry.NeedsBuild = entry.Fingerprint != remote.FirmwareFingerprint(v.Device, v.Line.ID)
 		out = append(out, entry)
 	}
-// variants 已按「设备名字典序 + line 声明顺序」排好，这里保持不动：
+	// variants 已按「设备名字典序 + line 声明顺序」排好，这里保持不动：
 	return out
 }
 

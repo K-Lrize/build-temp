@@ -146,33 +146,24 @@ jobs:
 
       - name: 抠 vermagic、拆分 kmod/base 并签名索引
         id: kmod_meta
+        # wrt 直接把 vermagic/kernel_version/kmod_count/sdk_file/ib_file/…
+        # 结构化写进 $GITHUB_OUTPUT，下游步骤以 steps.kmod_meta.outputs.<key> 读取。
+        # 抠不到 vermagic 时 wrt 自身非零退出，无需在这里再判。
         run: |
-          # 使用 wrt toolchain collect 提取 vermagic 并分类打包
           "$WRT" toolchain collect \
             --openwrt-dir openwrt \
             --out-dir out \
             --target "$TARGET" \
-            --subtarget "$SUBTARGET" > toolchain_collect.log
-          
-          cat toolchain_collect.log
-          
-          # 提取 GitHub Actions Output 变量
-          VM_SEG="$(grep "::set-output name=vm_seg::" toolchain_collect.log | awk -F'::' '{print $3}')"
-          KMOD_COUNT="$(grep "::set-output name=kmod_count::" toolchain_collect.log | awk -F'::' '{print $3}')"
-          
-          [ -n "$VM_SEG" ] || { echo "::error::wrt 工具抠不到 vermagic"; exit 1; }
-          
-          echo "vm_seg=$VM_SEG" >> "$GITHUB_OUTPUT"
-          echo "kmod_count=$KMOD_COUNT" >> "$GITHUB_OUTPUT"
+            --subtarget "$SUBTARGET"
 
       - name: 产物形状断言
         env:
-          VM_SEG: ${{ steps.kmod_meta.outputs.vm_seg }}
+          VERMAGIC: ${{ steps.kmod_meta.outputs.vermagic }}
           KMOD_COUNT: ${{ steps.kmod_meta.outputs.kmod_count }}
         run: |
           [ -f "out/sdk-ib/${{ steps.kmod_meta.outputs.sdk_file }}" ] || { echo "::error::缺 SDK 归档"; exit 1; }
           [ -f "out/sdk-ib/${{ steps.kmod_meta.outputs.ib_file }}" ] || { echo "::error::缺 IB 归档"; exit 1; }
-          [ -f "out/kmods/$VM_SEG/packages.adb" ] || { echo "::error::缺 kmod 索引"; exit 1; }
+          [ -f "out/kmods/$VERMAGIC/packages.adb" ] || { echo "::error::缺 kmod 索引"; exit 1; }
           [ -f "out/base/packages.adb" ] || { echo "::error::缺 base 索引"; exit 1; }
           [ "${KMOD_COUNT:-0}" -gt 0 ] || { echo "::error::kmod 数为 0，编译多半残缺"; exit 1; }
           # kmod 下降检测：与上次比暴跌通常意味着编译异常
@@ -185,38 +176,39 @@ jobs:
       - name: 生成 meta.json / current.json
         env:
           BUILD_ID: ${{ steps.build_id.outputs.id }}
-          VM_SEG: ${{ steps.kmod_meta.outputs.vm_seg }}
+          VERMAGIC: ${{ steps.kmod_meta.outputs.vermagic }}
+          KERNEL_VERSION: ${{ steps.kmod_meta.outputs.kernel_version }}
           KMOD_COUNT: ${{ steps.kmod_meta.outputs.kmod_count }}
+          SDK_FILE: ${{ steps.kmod_meta.outputs.sdk_file }}
+          IB_FILE: ${{ steps.kmod_meta.outputs.ib_file }}
+          SDK_SHA: ${{ steps.kmod_meta.outputs.sdk_sha256 }}
+          IB_SHA: ${{ steps.kmod_meta.outputs.ib_sha256 }}
         run: |
-          SDK_FILE="${{ steps.kmod_meta.outputs.sdk_file }}"
-          IB_FILE="${{ steps.kmod_meta.outputs.ib_file }}"
-          SDK_SHA="${{ steps.kmod_meta.outputs.sdk_sha256 }}"
-          IB_SHA="${{ steps.kmod_meta.outputs.ib_sha256 }}"
-          KVER="${VM_SEG%%-1-*}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           mkdir -p out/reg-build out/reg-current
-          # 生成 meta.json
+          # 不可变溯源档案 meta.json
           "$WRT" meta build --line "$LINE" --target "$TARGET" --subtarget "$SUBTARGET" \
             --line-tree "$LINE_TREE" --upstream-commit "$UPSTREAM_COMMIT" \
-            --build-id "$BUILD_ID" --vermagic "$VM_SEG" --kernel-version "$KVER" \
+            --build-id "$BUILD_ID" --vermagic "$VERMAGIC" --kernel-version "$KERNEL_VERSION" \
             --sdk-sha256 "$SDK_SHA" --ib-sha256 "$IB_SHA" \
             --ci-run-url "$RUN_URL" > out/reg-build/meta.json
-          # 生成 current.json
-          "$WRT" meta pointer-build --fingerprint "$FINGERPRINT" --build-id "$BUILD_ID" --vermagic "$VM_SEG" \
+          # 可变指针 current.json
+          "$WRT" meta pointer-build --fingerprint "$FINGERPRINT" --build-id "$BUILD_ID" --vermagic "$VERMAGIC" \
             --sdk "$SDK_FILE" --ib "$IB_FILE" --kmod-count "$KMOD_COUNT" > out/reg-current/current.json
 
       - name: 发布到 R2
         env:
           BUILD_ID: ${{ steps.build_id.outputs.id }}
-          VM_SEG: ${{ steps.kmod_meta.outputs.vm_seg }}
+          VERMAGIC: ${{ steps.kmod_meta.outputs.vermagic }}
         run: |
           BASEK="$LINE/targets/$TARGET/$SUBTARGET"
-          "$WRT" publish out/sdk-ib          "$BASEK/builds/$BUILD_ID"
-          "$WRT" publish "out/kmods/$VM_SEG" "$BASEK/kmods/$VM_SEG"
-          "$WRT" publish out/base            "$BASEK/packages"
-          "$WRT" publish out/reg-build       "$BASEK/builds/$BUILD_ID"
-          "$WRT" publish out/reg-current     "$BASEK"
+          # SDK/IB/sha256sums/meta.json 平铺在 target 目录，覆盖写（latest-only）
+          "$WRT" publish out/sdk-ib            "$BASEK"
+          "$WRT" publish out/kmods/$VERMAGIC   "$BASEK/kmods/$VERMAGIC"
+          "$WRT" publish out/base              "$BASEK/packages"
+          "$WRT" publish out/reg-build         "$BASEK"
+          "$WRT" publish out/reg-current       "$BASEK"
 
       - name: 安全清理
         if: always()

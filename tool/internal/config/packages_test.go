@@ -36,7 +36,7 @@ func TestMergePackages(t *testing.T) {
 			add: []string{"curl", "jq", "ip-full", "sing-box"},
 		},
 		{
-// 去重保留首次出现的位置：包列表顺序会进指纹，靠后去重会让
+			// 去重保留首次出现的位置：包列表顺序会进指纹，靠后去重会让
 			name: "跨层重复的包只保留首次出现的位置",
 			layers: []Layer{
 				layer("set:a", []string{"curl", "jq"}, nil),
@@ -107,9 +107,8 @@ func TestMergePackages(t *testing.T) {
 	}
 }
 
-
 func TestPackagesList(t *testing.T) {
-// ImageBuilder 的 `make image PACKAGES=` 语法：装的包直接写，卸的包带 -
+	// ImageBuilder 的 `make image PACKAGES=` 语法：装的包直接写，卸的包带 -
 	p := Packages{
 		Add:    []string{"luci", "sing-box"},
 		Remove: []string{"dnsmasq", "wpad-basic"},

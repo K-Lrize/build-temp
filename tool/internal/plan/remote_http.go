@@ -64,7 +64,7 @@ func (r *httpRemote) fetch(objectPath string, out any) bool {
 	if resp.StatusCode != http.StatusOK {
 		return false
 	}
-// 限长读取：远端返回一个巨大的对象不该把 plan 撑爆。这几份元数据都是
+	// 限长读取：远端返回一个巨大的对象不该把 plan 撑爆。这几份元数据都是
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return false

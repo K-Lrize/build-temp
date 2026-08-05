@@ -133,7 +133,7 @@ func TestMatchingRemoteFingerprintSkipsTheBuild(t *testing.T) {
 			t.Errorf("固件 %s 指纹一致，不该重建", e.Variant)
 		}
 	}
-// 「无变更时三个矩阵为空」说的是待构建的那一份——Build 本身返回的是
+	// 「无变更时三个矩阵为空」说的是待构建的那一份——Build 本身返回的是
 	if !p.Pending().Empty() {
 		t.Errorf("全部命中时待构建矩阵应为空 —— 这是幂等性的证明\n%+v", p.Pending())
 	}
@@ -188,7 +188,7 @@ func TestPlanIsDeterministic(t *testing.T) {
 }
 
 func TestPackagesEntryPicksADeterministicSDKTarget(t *testing.T) {
-// 同一条 line 下同一个 arch 可能来自多个 target。用哪套 SDK 编用户态包
+	// 同一条 line 下同一个 arch 可能来自多个 target。用哪套 SDK 编用户态包
 	p := buildPlan(t, tree(t), NoRemote{})
 	for _, e := range p.Packages {
 		if e.SDKTarget == "" {

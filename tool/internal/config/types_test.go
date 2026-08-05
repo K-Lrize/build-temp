@@ -13,9 +13,9 @@ func officialLine() Line {
 
 func selfLine() Line {
 	return Line{
-		ID:               "25.12-selfbuild",
+		ID:             "25.12-selfbuild",
 		OpenWrtVersion: "25.12.5",
-		Artifacts:        ArtifactsSelf,
+		Artifacts:      ArtifactsSelf,
 		Source: &Source{
 			Repo:   "https://github.com/openwrt/openwrt",
 			Ref:    "v25.12.5",
@@ -79,7 +79,7 @@ func TestLineValidate(t *testing.T) {
 			[]string{"line.source.ref"},
 		},
 
-// artifacts=self 时 L3 社区 feed 仍借 openwrt_version 那条线，两者版本线
+		// artifacts=self 时 L3 社区 feed 仍借 openwrt_version 那条线，两者版本线
 		{
 			"ref 与 openwrt_version 不在同一条版本线",
 			func(l *Line) { *l = selfLine(); l.OpenWrtVersion = "24.10.2" },
@@ -142,7 +142,7 @@ func TestDeviceValidate(t *testing.T) {
 		{"profile 为空", func(d *Device) { d.Hardware.Profile = "" }, []string{"device.hardware"}},
 		{"arch 为空", func(d *Device) { d.Hardware.Arch = "" }, []string{"device.arch", "device.hardware"}},
 
-// arch 打错一个字母 -> 从错误架构的仓库拉包 -> 不可开机，而其余校验全绿。
+		// arch 打错一个字母 -> 从错误架构的仓库拉包 -> 不可开机，而其余校验全绿。
 		{
 			"已收录组合的 arch 填错",
 			func(d *Device) { d.Hardware.Arch = "aarch64_generic" },
@@ -237,7 +237,7 @@ func TestSetValidate(t *testing.T) {
 }
 
 func TestLineRequiresBuildIsDerivedNotDeclared(t *testing.T) {
-// requires_build 是「lines/<id>/ 下有没有 overlay/patches/config」的派生结论，
+	// requires_build 是「lines/<id>/ 下有没有 overlay/patches/config」的派生结论，
 	f, ok := reflect.TypeOf(Line{}).FieldByName("RequiresBuild")
 	if !ok {
 		t.Fatal("Line 缺少 RequiresBuild 字段")

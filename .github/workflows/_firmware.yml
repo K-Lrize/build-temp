@@ -13,6 +13,10 @@ on:
       release_id:
         required: true
         type: string
+      fingerprint:
+        description: "plan 算好的 variant 指纹，写进 meta/current 供下次 plan 一跳比对"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -20,6 +24,10 @@ permissions:
 jobs:
   firmware:
     runs-on: ubuntu-24.04
+    # 同一 variant 串行发布：否则较慢的旧 run 会把设备指针 current.json 回退到旧 release。
+    concurrency:
+      group: publish-firmware-${{ inputs.variant }}
+      cancel-in-progress: false
     env:
       WRT_S3_ENDPOINT: ${{ vars.R2_ENDPOINT }}
       WRT_S3_BUCKET: ${{ vars.R2_BUCKET }}
@@ -28,6 +36,7 @@ jobs:
       REPO_BASE: ${{ vars.R2_PUBLIC_URL }}
       VARIANT: ${{ inputs.variant }}
       RELEASE_ID: ${{ inputs.release_id }}
+      FINGERPRINT: ${{ inputs.fingerprint }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -49,6 +58,7 @@ jobs:
             echo "OPENWRT_VERSION=$(echo "$R" | jq -r .line.openwrt_version)"
             echo "DEVICE=$(echo "$R" | jq -r .device)"
             echo "LINE=$(echo "$R" | jq -r .line.id)"
+            echo "UPSTREAM_COMMIT=$(echo "$R" | jq -r '.line.source.commit // ""')"
             echo "PARTSIZE=$(echo "$R" | jq -r '.image.rootfs_partsize // 0')"
             echo "PACKAGES=$(echo "$R" | jq -r '.packages | join(" ")')"
           } >> "$GITHUB_ENV"
@@ -130,8 +140,9 @@ jobs:
           # 将 IB out 目录整份打包，并旁挂 meta.json 与 current.json 指针
           cp -a "$IB_ROOT/out/." "stage/${RELDIR}/"
           "$WRT" meta release "$VARIANT" --release-id "$RELEASE_ID" --vermagic "$VERMAGIC" \
+            --upstream-commit "$UPSTREAM_COMMIT" --fingerprint "$FINGERPRINT" \
             --ci-run-url "$RUN_URL" > "stage/${RELDIR}/meta.json"
-          "$WRT" meta pointer "$VARIANT" --release-id "$RELEASE_ID" > "stage/${LINEDIR}/current.json"
+          "$WRT" meta pointer --release-id "$RELEASE_ID" --fingerprint "$FINGERPRINT" > "stage/${LINEDIR}/current.json"
           find stage -type f | sed 's|^stage/||'
 
       - name: 发布到 R2（内容→索引→指针）

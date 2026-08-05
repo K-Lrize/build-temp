@@ -1,4 +1,4 @@
-package packages
+package pkglint
 
 import (
 	"os"
@@ -83,7 +83,7 @@ func TestValidationRules(t *testing.T) {
 			makefile: minimal,
 		},
 		{
-// 目录名与 PKG_NAME 不一致时，CI 按目录名下的 make package/<dir>/compile
+			// 目录名与 PKG_NAME 不一致时，CI 按目录名下的 make package/<dir>/compile
 			name:     "目录名与 PKG_NAME 不符",
 			dir:      "other",
 			makefile: minimal,
@@ -136,7 +136,7 @@ func TestValidationRules(t *testing.T) {
 			makefile: replaceVar(minimal, "PKG_VERSION", "1:2.0-r3"),
 		},
 		{
-// PKG_VERSION 常被写成引用另一个变量，展开后的值这里看不到，
+			// PKG_VERSION 常被写成引用另一个变量，展开后的值这里看不到，
 			name:     "值是 make 变量引用时跳过校验",
 			dir:      "demo",
 			makefile: replaceVar(minimal, "PKG_VERSION", "$(PKG_SOURCE_DATE)"),
@@ -194,7 +194,7 @@ func TestValidationRules(t *testing.T) {
 			rules: []string{"feed.pkg-release"},
 		},
 		{
-// 不顶替任何东西的自建包，PKG_RELEASE 从 1 开始完全正常，
+			// 不顶替任何东西的自建包，PKG_RELEASE 从 1 开始完全正常，
 			name:     "纯自建包的 PKG_RELEASE 不该被挑剔",
 			dir:      "demo",
 			makefile: replaceVar(minimal, "PKG_RELEASE", "1"),

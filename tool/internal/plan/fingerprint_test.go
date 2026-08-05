@@ -37,7 +37,7 @@ packages:
   include: [common]
   add: [sing-box]
 `,
-		"devices/router/files/etc/sysctl.d/99.conf": "x\n",
+		"devices/router/rootfs/etc/sysctl.d/99.conf": "x\n",
 		"devices/vm/device.yaml": `
 name: vm
 hardware: {target: armsr, subtarget: armv8, profile: generic, arch: aarch64_generic}
@@ -96,40 +96,40 @@ func TestFingerprintsAreStableAcrossRuns(t *testing.T) {
 }
 
 func TestFingerprintsAreLayered(t *testing.T) {
-// 上层变了，依赖它的下层必须跟着变——不需要显式列举「改了 A 要连带
+	// 上层变了，依赖它的下层必须跟着变——不需要显式列举「改了 A 要连带
 	tests := []struct {
 		name   string
 		mutate func(t *testing.T, root string)
 		// 期望发生变化的 variant 与它们变化的那几层
-		changedLine    []string
+		changedLine     []string
 		changedPackages []string
-		changedVariant []string
+		changedVariant  []string
 	}{
 		{
 			name: "改 line 的 overlay",
 			mutate: func(t *testing.T, root string) {
 				write(t, root, "lines/25.12-mtk/overlay/target/linux/x/patches-6.12/900.patch", "diff 改了\n")
 			},
-			changedLine:    []string{"router@25.12-mtk"},
-			changedPackages:    []string{"router@25.12-mtk"},
-			changedVariant: []string{"router@25.12-mtk"},
+			changedLine:     []string{"router@25.12-mtk"},
+			changedPackages: []string{"router@25.12-mtk"},
+			changedVariant:  []string{"router@25.12-mtk"},
 		},
 		{
 			name: "改 line.yaml 本身",
 			mutate: func(t *testing.T, root string) {
 				write(t, root, "lines/25.12/line.yaml", "id: \"25.12\"\nopenwrt_version: 25.12.6\nartifacts: official\n")
 			},
-			changedLine:    []string{"router@25.12", "vm@25.12"},
-			changedPackages:    []string{"router@25.12", "vm@25.12"},
-			changedVariant: []string{"router@25.12", "vm@25.12"},
+			changedLine:     []string{"router@25.12", "vm@25.12"},
+			changedPackages: []string{"router@25.12", "vm@25.12"},
+			changedVariant:  []string{"router@25.12", "vm@25.12"},
 		},
 		{
 			name: "改自有包 packages",
 			mutate: func(t *testing.T, root string) {
 				write(t, root, "packages/demo/Makefile", "PKG_NAME:=demo\nPKG_VERSION:=2.0\n$(eval $(call BuildPackage,demo))\n")
 			},
-			changedPackages:    []string{"router@25.12", "router@25.12-mtk", "vm@25.12"},
-			changedVariant: []string{"router@25.12", "router@25.12-mtk", "vm@25.12"},
+			changedPackages: []string{"router@25.12", "router@25.12-mtk", "vm@25.12"},
+			changedVariant:  []string{"router@25.12", "router@25.12-mtk", "vm@25.12"},
 		},
 		{
 			name: "改设备自己的 rootfs",
@@ -153,7 +153,7 @@ func TestFingerprintsAreLayered(t *testing.T) {
 			changedVariant: []string{"router@25.12", "router@25.12-mtk", "vm@25.12"},
 		},
 		{
-// 这一条是上一代真实存在的洞：那时 firmware 指纹哈希整棵
+			// 这一条是上一代真实存在的洞：那时 firmware 指纹哈希整棵
 			name: "改一个没有任何设备 include 的包集",
 			mutate: func(t *testing.T, root string) {
 				write(t, root, "sets/unused.yaml", "name: unused\nadd: [htop, ncdu]\n")
@@ -176,7 +176,7 @@ func TestFingerprintsAreLayered(t *testing.T) {
 }
 
 func TestLineTreeIsExposedSeparatelyFromUpstreamCommit(t *testing.T) {
-// 工具链 meta.json 把「我们自己配置改的」与「源码改的」分成两个字段存，
+	// 工具链 meta.json 把「我们自己配置改的」与「源码改的」分成两个字段存，
 	fps, _ := computeAll(t, tree(t))
 	fp := fps["router@25.12-mtk"]
 	if fp.LineTree == "" {
@@ -197,7 +197,7 @@ func TestSameDeviceDifferentLinesGetDifferentVariantFingerprints(t *testing.T) {
 func TestExecutableBitParticipatesInFingerprint(t *testing.T) {
 	// overlay 里的脚本从不可执行变成可执行，是固件内容的实质变化。
 	root := tree(t)
-	path := filepath.Join(root, "devices/router/files/etc/sysctl.d/99.conf")
+	path := filepath.Join(root, "devices/router/rootfs/etc/sysctl.d/99.conf")
 	before, _ := computeAll(t, root)
 	if err := os.Chmod(path, 0o755); err != nil {
 		t.Fatal(err)

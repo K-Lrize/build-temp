@@ -1,4 +1,6 @@
-package packages
+// Package feeds 把仓库的 feed pin 覆盖进 SDK 自带的 feeds.conf.default，并注入
+// 自有 feed（构建期源码 feed 装配，与二进制软件源 internal/repos 无关）。
+package feeds
 
 import "strings"
 

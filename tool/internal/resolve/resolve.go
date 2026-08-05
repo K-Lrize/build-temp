@@ -14,12 +14,13 @@ import (
 const Separator = "@"
 
 // LineFacts 是一条 line 在 variant 里的投影。
+// 注意不投影 config.Line.RequiresBuild：那是「源码相对官方有没有改」的派生量，
+// 只服务 lint 校验（self 线也可能为 false，放进 variant 会被误读成「要不要构建」）。
 type LineFacts struct {
-	ID               string           `json:"id"`
+	ID             string           `json:"id"`
 	OpenWrtVersion string           `json:"openwrt_version"`
-	Artifacts        config.Artifacts `json:"artifacts"`
-	RequiresBuild    bool             `json:"requires_build"`
-	Source           *config.Source   `json:"source,omitempty"`
+	Artifacts      config.Artifacts `json:"artifacts"`
+	Source         *config.Source   `json:"source,omitempty"`
 }
 
 // Variant 是 device × line 的展开结果，构建的最小单位。
@@ -136,11 +137,10 @@ func build(cfg *config.Config, device config.Device, lineID string) (Variant, di
 		ID:     MakeID(device.Name, lineID),
 		Device: device.Name,
 		Line: LineFacts{
-			ID:               line.ID,
+			ID:             line.ID,
 			OpenWrtVersion: line.OpenWrtVersion,
-			Artifacts:        line.Artifacts,
-			RequiresBuild:    line.RequiresBuild,
-			Source:           line.Source,
+			Artifacts:      line.Artifacts,
+			Source:         line.Source,
 		},
 		Hardware:   device.Hardware,
 		Metadata:   device.Metadata,

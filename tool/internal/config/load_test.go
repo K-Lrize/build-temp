@@ -125,7 +125,7 @@ func TestLoadDerivesRequiresBuildFromDisk(t *testing.T) {
 }
 
 func TestLoadRejectsSourceChangesOnOfficialLine(t *testing.T) {
-// 有 overlay/patches/config 却声明 artifacts: official —— 官方不可能有
+	// 有 overlay/patches/config 却声明 artifacts: official —— 官方不可能有
 	_, ps := loadTree(t, map[string]string{
 		"lines/25.12/line.yaml":          yamlLineOfficial,
 		"lines/25.12/patches/0001.patch": "diff\n",
@@ -136,7 +136,7 @@ func TestLoadRejectsSourceChangesOnOfficialLine(t *testing.T) {
 }
 
 func TestLoadRejectsUnknownFields(t *testing.T) {
-// 上一代的 device.yaml 有 channel: 字段。写错字段名或留着已删除的旧字段，
+	// 上一代的 device.yaml 有 channel: 字段。写错字段名或留着已删除的旧字段，
 	files := goodTree()
 	files["devices/vm-armsr/device.yaml"] = yamlDeviceVM + "\nchannel: \"25.12\"\n"
 	_, ps := loadTree(t, files)
@@ -207,7 +207,7 @@ func TestLoadDanglingReferences(t *testing.T) {
 }
 
 func TestLoadWarnsOnUnreferencedConfig(t *testing.T) {
-// 没有任何设备引用的 line / set 是死配置：它会照常进 lint、照常被人读到，
+	// 没有任何设备引用的 line / set 是死配置：它会照常进 lint、照常被人读到，
 	files := goodTree()
 	files["sets/unused.yaml"] = "name: unused\nadd: [htop]\n"
 	files["lines/25.12-selfbuild/line.yaml"] = yamlLineSelf

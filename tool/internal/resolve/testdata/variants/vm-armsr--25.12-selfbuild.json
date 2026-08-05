@@ -5,7 +5,6 @@
     "id": "25.12-selfbuild",
     "openwrt_version": "25.12.5",
     "artifacts": "self",
-    "requires_build": false,
     "source": {
       "repo": "https://github.com/openwrt/openwrt",
       "commit": "f0a60eee2fe051741c643ea6118718aae1ef17fb",

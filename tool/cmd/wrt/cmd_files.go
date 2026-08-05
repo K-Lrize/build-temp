@@ -6,8 +6,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/K-Lrize/openwrt-build/internal/config"
-	"github.com/K-Lrize/openwrt-build/internal/rootfs"
 	"github.com/K-Lrize/openwrt-build/internal/resolve"
+	"github.com/K-Lrize/openwrt-build/internal/rootfs"
 )
 
 func filesCmd(app *App) *cobra.Command {

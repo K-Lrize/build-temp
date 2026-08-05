@@ -36,7 +36,7 @@ func TestReleaseIsBuildWithRPrefix(t *testing.T) {
 }
 
 func TestTimeIsNormalisedToUTC(t *testing.T) {
-// 注入一个带时区的时间，输出必须是 UTC——否则不同机器的本地时区会算出
+	// 注入一个带时区的时间，输出必须是 UTC——否则不同机器的本地时区会算出
 	east := time.FixedZone("UTC+8", 8*3600)
 	got, err := Build(time.Date(2026, 7, 30, 22, 21, 4, 0, east), "42", "f0a60ee")
 	if err != nil {

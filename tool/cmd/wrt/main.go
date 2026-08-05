@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -27,8 +29,8 @@ func NewRootCmd() *cobra.Command {
 	app := &App{}
 
 	rootCmd := &cobra.Command{
-		Use:   "wrt",
-		Short: "wrt —— openwrt-build 的构建编排入口",
+		Use:          "wrt",
+		Short:        "wrt —— openwrt-build 的构建编排入口",
 		SilenceUsage: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			resolved, err := repositoryRoot(rootDir)
@@ -56,7 +58,24 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(idCmd(app))
 	rootCmd.AddCommand(fetchCmd(app))
 
-	return rootCmd
+	return mustSubcommand(rootCmd)
+}
+
+// mustSubcommand 让一个「只分发、自己不干活」的父命令在缺子命令或子命令拼错时
+// 返回非零，而不是打印帮助后静默 exit 0——后者在 CI 脚本里会被当成成功。
+func mustSubcommand(cmd *cobra.Command) *cobra.Command {
+	cmd.RunE = func(c *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			_ = c.Help()
+			return errors.New("请指定一个子命令")
+		}
+		var names []string
+		for _, sub := range c.Commands() {
+			names = append(names, sub.Name())
+		}
+		return fmt.Errorf("未知子命令 %q；可用：%s", args[0], strings.Join(names, ", "))
+	}
+	return cmd
 }
 
 // repositoryRoot 定位仓库根。显式 -C 优先，其次 WRT_ROOT，最后从当前目录

@@ -29,6 +29,12 @@ func TestPaths(t *testing.T) {
 			CurrentPath("25.12-mtk", "mediatek", "filogic"),
 			"25.12-mtk/targets/mediatek/filogic/current.json",
 		},
+		{
+			// SDK/IB/sha256sums/meta.json 平铺在 TargetDir，latest-only 覆盖写。
+			"工具链构建溯源档案（平铺在 TargetDir）",
+			BuildMetaPath("25.12-mtk", "mediatek", "filogic"),
+			"25.12-mtk/targets/mediatek/filogic/meta.json",
+		},
 
 		{
 			// device 顶层、line 居中：人的入口是设备，GC 也按设备分组。
@@ -51,7 +57,6 @@ func TestPaths(t *testing.T) {
 			PackagesCurrentPath("25.12", "aarch64_generic"),
 			"25.12/packages/aarch64_generic/current.json",
 		},
-
 	}
 
 	for _, tc := range tests {
@@ -69,7 +74,7 @@ func TestPaths(t *testing.T) {
 }
 
 func TestOneDeviceTwoLinesDoNotCollide(t *testing.T) {
-// 同一台设备两条版本线的固件必须落在不同目录，否则后发的会覆盖先发的。
+	// 同一台设备两条版本线的固件必须落在不同目录，否则后发的会覆盖先发的。
 	a := ReleaseDir("mt3600be", "25.12", "r1")
 	b := ReleaseDir("mt3600be", "25.12-mtk", "r1")
 	if a == b {
@@ -81,7 +86,7 @@ func TestOneDeviceTwoLinesDoNotCollide(t *testing.T) {
 }
 
 func TestAllDeviceLinesShareOnePrefix(t *testing.T) {
-// GC 要按设备一次列举出它全部版本线的发布：devices/<device>/ 下扫一次
+	// GC 要按设备一次列举出它全部版本线的发布：devices/<device>/ 下扫一次
 	const wantPrefix = "devices/mt3600be/"
 	for _, p := range []string{
 		DeviceLineDir("mt3600be", "25.12"),

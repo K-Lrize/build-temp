@@ -20,7 +20,7 @@ import (
 
 // Fingerprints 是一个 variant 的三层指纹。
 type Fingerprints struct {
-// LineTree 是 line 目录树的哈希，**不含** upstream commit。
+	// LineTree 是 line 目录树的哈希，**不含** upstream commit。
 	LineTree string `json:"line_tree"`
 	Line     string `json:"line"`
 	Feed     string `json:"feed"`
@@ -50,7 +50,7 @@ func (c *Computer) For(cfg *config.Config, v resolve.Variant) (Fingerprints, err
 		return Fingerprints{}, err
 	}
 
-// upstream commit 是源码基线的另一半，但它不在磁盘上——它是 line.yaml
+	// upstream commit 是源码基线的另一半，但它不在磁盘上——它是 line.yaml
 	upstreamCommit := ""
 	if v.Line.Source != nil {
 		upstreamCommit = v.Line.Source.Commit
@@ -63,7 +63,7 @@ func (c *Computer) For(cfg *config.Config, v resolve.Variant) (Fingerprints, err
 	}
 	feedFP := combine(feedTree, lineFP)
 
-// 只把这台设备**实际 include 的**包集计入。
+	// 只把这台设备**实际 include 的**包集计入。
 	device, ok := cfg.Devices[v.Device]
 	if !ok {
 		return Fingerprints{}, fmt.Errorf("设备 %q 不存在", v.Device)

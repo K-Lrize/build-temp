@@ -4,7 +4,6 @@ package rootfs
 import (
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -12,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/K-Lrize/openwrt-build/internal/fsutil"
 	"github.com/K-Lrize/openwrt-build/internal/resolve"
 )
 
@@ -90,7 +90,7 @@ func runGen(root, dir string, env []string) error {
 
 	for _, name := range scripts {
 		path := filepath.Join(dir, name)
-// 显式用 bash 跑而不依赖 shebang 与可执行位：脚本从 git 检出后权限位
+		// 显式用 bash 跑而不依赖 shebang 与可执行位：脚本从 git 检出后权限位
 		cmd := exec.Command("bash", path)
 		cmd.Dir = root
 		cmd.Env = env
@@ -130,7 +130,7 @@ func copyTree(src, dst string) error {
 		case d.IsDir():
 			return os.MkdirAll(target, 0o755)
 		case d.Type()&fs.ModeSymlink != 0:
-// 保留链接而不是解引用：rootfs 里的符号链接是有意义的内容，
+			// 保留链接而不是解引用：rootfs 里的符号链接是有意义的内容，
 			link, err := os.Readlink(path)
 			if err != nil {
 				return err
@@ -138,37 +138,10 @@ func copyTree(src, dst string) error {
 			_ = os.Remove(target) // 后层覆盖前层
 			return os.Symlink(link, target)
 		case d.Type().IsRegular():
-			return copyFile(path, target)
+			return fsutil.CopyFile(path, target)
 		default:
-// 设备节点、FIFO 之类不该出现在 git 里。静默跳过会让固件少东西
+			// 设备节点、FIFO 之类不该出现在 git 里。静默跳过会让固件少东西
 			return fmt.Errorf("%s 是不支持的文件类型 %v", path, d.Type())
 		}
 	})
-}
-
-func copyFile(src, dst string) error {
-	info, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	// 先删再建：后层覆盖前层时，若前层文件是只读的，直接写会失败。
-	_ = os.Remove(dst)
-// 权限位原样带过去——uci-defaults 里的脚本不可执行就等于没写，
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, in); err != nil {
-		return err
-	}
-	return out.Close()
 }

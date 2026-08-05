@@ -60,9 +60,9 @@ func TestOverThreshold(t *testing.T) {
 		total, del, pct int
 		want            bool
 	}{
-		{total: 0, del: 0, pct: 30, want: false},   // 无对象，安全
-		{total: 10, del: 3, pct: 30, want: false},  // 正好 30%，不超过
-		{total: 10, del: 4, pct: 30, want: true},   // 40% > 30%
+		{total: 0, del: 0, pct: 30, want: false},  // 无对象，安全
+		{total: 10, del: 3, pct: 30, want: false}, // 正好 30%，不超过
+		{total: 10, del: 4, pct: 30, want: true},  // 40% > 30%
 		{total: 100, del: 30, pct: 30, want: false},
 		{total: 100, del: 31, pct: 30, want: true},
 	} {

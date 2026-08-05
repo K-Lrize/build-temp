@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/K-Lrize/openwrt-build/internal/packages"
+	"github.com/K-Lrize/openwrt-build/internal/feeds"
 )
 
 // runFeeds 就地改写 SDK 的 feeds.conf.default：外部 feed 按 feed/feeds.conf 的
@@ -40,12 +40,12 @@ func feedsCmd(app *App) *cobra.Command {
 				return err
 			}
 
-			merged := packages.MergeFeedsConf(string(sdkDefault), string(pins), feedPath)
+			merged := feeds.MergeFeedsConf(string(sdkDefault), string(pins), feedPath)
 			if err := os.WriteFile(defaultPath, []byte(merged), 0o644); err != nil {
 				return fmt.Errorf("写回 %s：%w", defaultPath, err)
 			}
 
-			fmt.Fprintf(app.Stdout, "%s 已 pin 外部 feed 并注入自有 feed（%s）\n", defaultPath, packages.CustomFeedName)
+			fmt.Fprintf(app.Stdout, "%s 已 pin 外部 feed 并注入自有 feed（%s）\n", defaultPath, feeds.CustomFeedName)
 			return nil
 		},
 	}

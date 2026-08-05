@@ -43,7 +43,7 @@ func TestLintAcceptsRepositoryTree(t *testing.T) {
 }
 
 func TestLintReportsEveryProblemAtOnce(t *testing.T) {
-// 两个文件各有一处错，一次运行要全报出来——修一条跑一遍是上一代
+	// 两个文件各有一处错，一次运行要全报出来——修一条跑一遍是上一代
 	root := t.TempDir()
 	write(t, root, "lines/25.12/line.yaml", "id: \"25.12\"\nopenwrt_version: nope\nartifacts: official\n")
 	write(t, root, "devices/vm/device.yaml", `
@@ -79,7 +79,7 @@ func TestLintPassesWithWarningsOnly(t *testing.T) {
 }
 
 func TestLintCoversFeedMakefiles(t *testing.T) {
-// 配置全绿但自有包的 Makefile 有问题时，lint 同样要拦——feed 里的错
+	// 配置全绿但自有包的 Makefile 有问题时，lint 同样要拦——feed 里的错
 	root := t.TempDir()
 	write(t, root, "packages/demo/Makefile", "PKG_NAME:=demo\nPKG_VERSION:=1.2.3-alpha.4\n$(eval $(call BuildPackage,demo))\n")
 
@@ -106,7 +106,7 @@ func TestResolveAllEmitsJSONArray(t *testing.T) {
 		t.Fatal("一个 variant 都没有")
 	}
 
-// vm-armsr 声明了两条 line，两条都要出现——这正是上一代要复制设备目录
+	// vm-armsr 声明了两条 line，两条都要出现——这正是上一代要复制设备目录
 	ids := map[string]bool{}
 	for _, v := range variants {
 		ids[v["id"].(string)] = true
@@ -177,7 +177,7 @@ func TestReposEmitsBothLists(t *testing.T) {
 }
 
 func TestFlagsWorkOnEitherSideOfThePositional(t *testing.T) {
-// 标准库的 flag 遇到第一个非 flag 参数就停止解析。这条如果回归，
+	// 标准库的 flag 遇到第一个非 flag 参数就停止解析。这条如果回归，
 	before := atRepo(t, "repos", "--repo-base", "https://r.example.com", "--vermagic", "vm", "mt3600be@25.12")
 	after := atRepo(t, "repos", "mt3600be@25.12", "--repo-base", "https://r.example.com", "--vermagic", "vm")
 
@@ -195,7 +195,7 @@ func TestFlagsWorkOnEitherSideOfThePositional(t *testing.T) {
 }
 
 func TestReposRequiresVermagic(t *testing.T) {
-// 缺 vermagic 时宁可失败也不能产出一份「看着正常、实际装不上任何
+	// 缺 vermagic 时宁可失败也不能产出一份「看着正常、实际装不上任何
 	_, _, err := runCLI(t, atRepo(t, "repos", "mt3600be@25.12", "--repo-base", "https://r.example.com")...)
 	if err == nil {
 		t.Fatal("缺 vermagic 应当报错")

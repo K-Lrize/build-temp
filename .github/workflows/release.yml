@@ -97,9 +97,11 @@ jobs:
     secrets: inherit
 
   firmware:
-    needs: [plan, packages]
-    # packages 必须先于 firmware。!cancelled() 避免无改动时流水线静默失败。
-    if: ${{ !cancelled() && needs.packages.result != 'failure' && needs.plan.outputs.firmware != '[]' }}
+    needs: [plan, toolchain, packages]
+    # toolchain 与 packages 都必须先于 firmware：任一失败就别拿旧地基组装固件。
+    # 必须逐层挡：只查 packages 时，「toolchain 失败 → packages 被 skip(≠failure)」
+    # 会漏过去让 firmware 拿旧工具链硬组装。!cancelled() 避免无改动时静默失败。
+    if: ${{ !cancelled() && needs.toolchain.result != 'failure' && needs.packages.result != 'failure' && needs.plan.outputs.firmware != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -108,6 +110,7 @@ jobs:
     with:
       variant: ${{ matrix.v.variant }}
       release_id: ${{ needs.plan.outputs.release_id }}
+      fingerprint: ${{ matrix.v.fingerprint }}
     secrets: inherit
 
   gc:

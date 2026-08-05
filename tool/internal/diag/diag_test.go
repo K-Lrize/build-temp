@@ -7,7 +7,7 @@ import (
 )
 
 func TestErrorfAndWarnfAccumulate(t *testing.T) {
-// 累积而不是遇错即返回：配置类问题成批出现，一次只报一条会让人来回
+	// 累积而不是遇错即返回：配置类问题成批出现，一次只报一条会让人来回
 	var ps Problems
 	ps = ps.Errorf("a.rule", "坏了 %d 个", 2)
 	ps = ps.Warnf("b.rule", "留意一下")
@@ -51,7 +51,7 @@ func TestCount(t *testing.T) {
 }
 
 func TestRulesAreDedupedAndSorted(t *testing.T) {
-// 测试断言「触发了哪几条规则」比断言具体措辞稳定得多，前提是这里
+	// 测试断言「触发了哪几条规则」比断言具体措辞稳定得多，前提是这里
 	var ps Problems
 	ps = ps.Errorf("z.rule", "x").Errorf("a.rule", "y").Warnf("z.rule", "z")
 	want := []string{"a.rule", "z.rule"}

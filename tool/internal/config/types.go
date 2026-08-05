@@ -14,9 +14,9 @@ const (
 // Source 指向一棵 OpenWrt 源码树。
 type Source struct {
 	Repo string `yaml:"repo" json:"repo"`
-// Commit 是唯一权威。tag 理论上不可变，但只信 commit 才能保证
+	// Commit 是唯一权威。tag 理论上不可变，但只信 commit 才能保证
 	Commit string `yaml:"commit" json:"commit"`
-// Ref 供人读，CI 不用它检出。唯一的机器用途是核对 openwrt_version 与源码
+	// Ref 供人读，CI 不用它检出。唯一的机器用途是核对 openwrt_version 与源码
 	Ref string `yaml:"ref,omitempty" json:"ref,omitempty"`
 }
 
@@ -24,12 +24,12 @@ type Source struct {
 type Line struct {
 	ID          string `yaml:"id"`
 	Description string `yaml:"description,omitempty"`
-// OpenWrtVersion 是完整 patch 号（如 25.12.5），不允许只写 25.12 让系统猜。
+	// OpenWrtVersion 是完整 patch 号（如 25.12.5），不允许只写 25.12 让系统猜。
 	OpenWrtVersion string    `yaml:"openwrt_version"`
-	Artifacts        Artifacts `yaml:"artifacts"`
-	Source           *Source   `yaml:"source,omitempty"`
+	Artifacts      Artifacts `yaml:"artifacts"`
+	Source         *Source   `yaml:"source,omitempty"`
 
-// RequiresBuild 是派生结论：lines/<id>/ 下 overlay、patches、config 任一非空，
+	// RequiresBuild 是派生结论：lines/<id>/ 下 overlay、patches、config 任一非空，
 	RequiresBuild bool `yaml:"-"`
 }
 

@@ -19,9 +19,9 @@ func variant(line string, artifacts config.Artifacts, extra ...string) resolve.V
 		ID:     "mt3600be@" + line,
 		Device: "mt3600be",
 		Line: resolve.LineFacts{
-			ID:               line,
+			ID:             line,
 			OpenWrtVersion: "25.12.5",
-			Artifacts:        artifacts,
+			Artifacts:      artifacts,
 		},
 		Hardware: config.Hardware{
 			Target:    "mediatek",
@@ -74,7 +74,7 @@ func TestOfficialLineBorrowsOpenWrtVersionForKernelLayers(t *testing.T) {
 func TestSelfLineUsesOwnR2ForKernelLayers(t *testing.T) {
 	r := assemble(t, variant("25.12-mtk", config.ArtifactsSelf), defaultOptions())
 
-// L2 两段整体改指自有 R2：自编内核的 vermagic 含配置哈希，官方
+	// L2 两段整体改指自有 R2：自编内核的 vermagic 含配置哈希，官方
 	for _, want := range []string{
 		"https://repo.example.com/25.12-mtk/targets/mediatek/filogic/kmods/" + testVermagic + "/packages.adb",
 		"https://repo.example.com/25.12-mtk/targets/mediatek/filogic/packages/packages.adb",
@@ -84,7 +84,7 @@ func TestSelfLineUsesOwnR2ForKernelLayers(t *testing.T) {
 		}
 	}
 
-// L3 社区 feed 仍然借官方——自建的只有内核与底座，上千个通用包没有
+	// L3 社区 feed 仍然借官方——自建的只有内核与底座，上千个通用包没有
 	for _, url := range r.Runtime {
 		if strings.Contains(url, "/packages/aarch64_cortex-a53/luci/") &&
 			!strings.HasPrefix(url, "https://downloads.openwrt.org/") {
@@ -94,7 +94,7 @@ func TestSelfLineUsesOwnR2ForKernelLayers(t *testing.T) {
 }
 
 func TestVermagicIsRequired(t *testing.T) {
-// 上一代在这里写占位符再让下游 grep 拦，跨三个进程传一个字符串协议。
+	// 上一代在这里写占位符再让下游 grep 拦，跨三个进程传一个字符串协议。
 	opt := defaultOptions()
 	opt.Vermagic = ""
 	if _, err := Assemble(variant("25.12", config.ArtifactsOfficial), opt); err == nil {
@@ -122,7 +122,7 @@ func TestTrailingSlashInRepoBaseIsTolerated(t *testing.T) {
 }
 
 func TestLocalMirrorsOnlyAffectBuildList(t *testing.T) {
-// 构建期从本地已预同步的索引取包（省一圈公网），但运行期列表必须是
+	// 构建期从本地已预同步的索引取包（省一圈公网），但运行期列表必须是
 	opt := defaultOptions()
 	opt.LocalL1 = "/build/ib/custom/packages.adb"
 	opt.LocalKmod = "/build/ib/kmods/packages.adb"

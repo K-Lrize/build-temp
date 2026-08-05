@@ -173,7 +173,7 @@ func (c *Config) validateCrossFile() diag.Problems {
 
 	for _, id := range c.SortedLineIDs() {
 		line := c.Lines[id]
-// 有 overlay/patches/config 却借官方产物：官方那边不可能有你改过的东西，
+		// 有 overlay/patches/config 却借官方产物：官方那边不可能有你改过的东西，
 		if line.RequiresBuild && line.Artifacts == ArtifactsOfficial {
 			var one diag.Problems
 			one = one.Errorf("line.requires-build",
@@ -206,7 +206,7 @@ func (c *Config) validateCrossFile() diag.Problems {
 		ps = append(ps, one.WithSource(rel)...)
 	}
 
-// 死配置：能通过全部校验、能被人读到，但永远不生效。只 warn——刚建好还没
+	// 死配置：能通过全部校验、能被人读到，但永远不生效。只 warn——刚建好还没
 	for _, id := range c.SortedLineIDs() {
 		if usedLines[id] {
 			continue

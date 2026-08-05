@@ -158,10 +158,12 @@ func gcToolchain(ctx context.Context, cl *publish.Client, variants []resolve.Var
 		}
 
 		base := artifacts.TargetDir(d.line, d.target, d.subtarget)
+		// kmods/：按 vermagic 键控，存活集 = 存活 release + 当前工具链在用的 vermagic。
 		if err := gcTargetGroup(ctx, cl, base+"/kmods/", liveList(st.liveVermagics, tcKey), st,
 			func(vm string) string { return artifacts.KmodsDir(d.line, d.target, d.subtarget, vm) }); err != nil {
 			return err
 		}
+		// SDK/IB 现为 latest-only 覆盖写，builds/ 层已取消，无需 gcBuilds。
 	}
 	return nil
 }
