@@ -94,7 +94,7 @@ func runFetch(app *App, typ string, opts FetchOptions) error {
 	var archiveName string
 	var vermagic string
 
-	client := &http.Client{Timeout: 60 * time.Second}
+	client := &http.Client{Timeout: 15 * time.Minute}
 
 	if opts.Artifacts == "official" {
 		baseUrl = fmt.Sprintf("https://downloads.openwrt.org/releases/%s/targets/%s/%s", opts.OpenwrtVersion, opts.Target, opts.Subtarget)
