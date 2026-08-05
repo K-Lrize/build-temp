@@ -165,14 +165,15 @@ func runToolchainCollect(app *App, openwrtDir, outDir, target, subtarget string)
 	}
 
 	// 签名索引
-	apkBin := filepath.Join(openwrtDir, "staging_dir", "host", "bin", "apk")
-	apkKey := filepath.Join(openwrtDir, "private-key.pem")
+	apkBin, _ := filepath.Abs(filepath.Join(openwrtDir, "staging_dir", "host", "bin", "apk"))
+	apkKey, _ := filepath.Abs(filepath.Join(openwrtDir, "private-key.pem"))
+	absOpenwrtDir, _ := filepath.Abs(openwrtDir)
 
 	if _, err := os.Stat(apkBin); err == nil {
-		if err := regenIndex(apkBin, apkKey, openwrtDir, kmodOut); err != nil {
+		if err := regenIndex(apkBin, apkKey, absOpenwrtDir, kmodOut); err != nil {
 			return fmt.Errorf("kmod 索引生成失败: %w", err)
 		}
-		if err := regenIndex(apkBin, apkKey, openwrtDir, baseOut); err != nil {
+		if err := regenIndex(apkBin, apkKey, absOpenwrtDir, baseOut); err != nil {
 			return fmt.Errorf("base 索引生成失败: %w", err)
 		}
 	} else {
